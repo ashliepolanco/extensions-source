@@ -148,12 +148,14 @@ abstract class Catoons : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/series/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/series/${chapter.url}", headers)
+ override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/series/${chapter.url}/__data.json", headers)
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("div.items-center > div.w-full > img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.attr("abs:src"))
+override fun pageListParse(response: Response): List<Page> {
+    val nodes = response.parseAs<SvelteRawDataDto>().nodes
+    val pageNode = nodes.first { it?.uses?.params?.contains("chapterId") == true }!!
+    val chapterData = decodeSvelte(pageNode.data!!).parseAs<PageChapterWrapperDto>()
+    return chapterData.chapter.images.mapIndexed { index, url -> Page(index, imageUrl = url) }
+}
         }
     }
 
@@ -266,3 +268,28 @@ abstract class Catoons : HttpSource() {
         private const val CHAPTERS_PER_PAGE = 100
     }
 }
+@kotlinx.serialization.Serializable
+data class SvelteRawDataDto(
+    val nodes: List<SvelteNodeDto?>,
+)
+
+@kotlinx.serialization.Serializable
+data class SvelteNodeDto(
+    val data: JsonArray? = null,
+    val uses: SvelteUsesDto? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class SvelteUsesDto(
+    val params: List<String>? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class PageChapterWrapperDto(
+    val chapter: PageChapterDto,
+)
+
+@kotlinx.serialization.Serializable
+data class PageChapterDto(
+    val images: List<String>,
+)
